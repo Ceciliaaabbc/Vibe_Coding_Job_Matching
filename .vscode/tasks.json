@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Job Agent: Start Docker App",
+      "type": "shell",
+      "command": "/opt/homebrew/bin/docker compose up -d",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "AI RAG Job Matcher: Install Dependencies",
+      "type": "shell",
+      "command": "python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
+      "options": {
+        "cwd": "${workspaceFolder}/backend/generated_projects/ai-rag-job-matcher"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "AI RAG Job Matcher: Run API",
+      "type": "shell",
+      "command": ". .venv/bin/activate && python -m uvicorn src.main:app --reload --port 8010",
+      "options": {
+        "cwd": "${workspaceFolder}/backend/generated_projects/ai-rag-job-matcher"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "dependsOn": "AI RAG Job Matcher: Install Dependencies"
+    }
+  ]
+}
