@@ -6,8 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.security import get_current_user
 from app.db.session import get_db
-from app.models.entities import Resume
+from app.models.entities import Resume, User
 from app.schemas.resume import (
     CareerDirectionRead,
     ProjectCreateRequest,
@@ -25,7 +26,11 @@ router = APIRouter()
 
 
 @router.post("/upload", response_model=ResumeRead)
-async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_db)) -> Resume:
+async def upload_resume(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Resume:
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "").suffix.lower()
@@ -43,6 +48,7 @@ async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_
         "note": "Structured LLM extraction will be added in the provider implementation.",
     }
     resume = Resume(
+        user_id=current_user.id,
         file_name=file.filename or file_name,
         file_type=suffix.removeprefix("."),
         file_path=str(file_path),
@@ -58,7 +64,10 @@ async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_
             "resume_chunks",
             chunks,
             [f"{resume.id}:{index}" for index, _ in enumerate(chunks)],
-            [{"resume_id": resume.id, "chunk_index": index} for index, _ in enumerate(chunks)],
+            [
+                {"resume_id": resume.id, "user_id": current_user.id, "chunk_index": index}
+                for index, _ in enumerate(chunks)
+            ],
         )
     except Exception:
         parsed["vector_index_warning"] = "ChromaDB indexing failed; resume upload was saved."
@@ -69,8 +78,12 @@ async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_
 
 
 @router.get("", response_model=list[ResumeRead])
-def list_resumes(db: Session = Depends(get_db)) -> list[Resume]:
-    resumes = list(db.scalars(select(Resume).order_by(Resume.created_at.desc())).all())
+def list_resumes(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> list[Resume]:
+    resumes = list(
+        db.scalars(select(Resume).where(Resume.user_id == current_user.id).order_by(Resume.created_at.desc())).all()
+    )
     for resume in resumes:
         resume.raw_text = None
     return resumes
@@ -91,8 +104,12 @@ def list_career_directions() -> list[dict]:
 
 
 @router.post("/optimize", response_model=ResumeOptimizeResponse)
-async def optimize_resume(payload: ResumeOptimizeRequest, db: Session = Depends(get_db)) -> dict:
-    resume = db.get(Resume, payload.resume_id)
+async def optimize_resume(
+    payload: ResumeOptimizeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    resume = db.scalar(select(Resume).where(Resume.id == payload.resume_id, Resume.user_id == current_user.id))
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found.")
 
@@ -106,7 +123,9 @@ async def optimize_resume(payload: ResumeOptimizeRequest, db: Session = Depends(
 
 
 @router.post("/projects", response_model=ProjectCreateResponse)
-def create_direction_project(payload: ProjectCreateRequest) -> dict:
+def create_direction_project(
+    payload: ProjectCreateRequest, current_user: User = Depends(get_current_user)
+) -> dict:
     try:
         return ResumeOptimizer().create_project_template(payload.direction_id, Path("/app/generated_projects"))
     except ValueError as exc:

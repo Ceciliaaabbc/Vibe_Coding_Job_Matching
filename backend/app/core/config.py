@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     chroma_port: int = 8001
     vector_store_enabled: bool = True
     upload_dir: str = "uploads"
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
     default_llm_provider: str = "openai"
     default_llm_model: str = "gpt-4.1-mini"
     default_embedding_model: str = "text-embedding-3-small"

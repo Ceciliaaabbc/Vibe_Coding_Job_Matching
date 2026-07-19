@@ -10,6 +10,7 @@ The system is designed around compliance guardrails:
 - Every job must enter a pending confirmation state before application.
 - Restricted job sites are handled with external links and semi-automatic user workflows only.
 - Data sources should be official APIs, RSS feeds, public pages, or user-authorized imports.
+- JWT authentication scopes resumes, jobs, matches, applications, materials, dashboard metrics, and vector retrieval to the signed-in user.
 
 ## Stack
 
@@ -34,6 +35,8 @@ Services:
 - Frontend: http://localhost:5173
 - PostgreSQL: localhost:5432
 - ChromaDB: http://localhost:8001
+
+Create an account from the web UI, or call `POST /auth/register`; subsequent API requests use the returned bearer token. Set a strong, private `JWT_SECRET` outside development.
 
 The backend container runs:
 

@@ -6,6 +6,18 @@ export type Resume = {
   parsed_json: Record<string, unknown>;
 };
 
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string | null;
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+};
+
 export type CareerDirection = {
   id: string;
   name: string;

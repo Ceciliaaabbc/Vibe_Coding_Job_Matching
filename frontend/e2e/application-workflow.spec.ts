@@ -24,7 +24,14 @@ function createPdf(text: string): Buffer {
 }
 
 test("candidate uploads a resume, matches a job, reviews materials, and confirms the application", async ({ page }) => {
+  const email = `taylor-${Date.now()}@example.com`;
   await page.goto("/");
+
+  await page.getByTestId("auth-name").fill("Taylor Candidate");
+  await page.getByTestId("auth-email").fill(email);
+  await page.getByTestId("auth-password").fill("password123");
+  await page.getByTestId("auth-submit").click();
+  await expect(page.getByText(email)).toBeVisible();
 
   await page.getByTitle("Resume").click();
   await page.getByTestId("resume-file").setInputFiles({

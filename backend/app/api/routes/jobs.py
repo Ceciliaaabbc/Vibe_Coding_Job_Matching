@@ -3,7 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.entities import Application, ApplicationMaterial, Job, JobSource, MatchScore, Resume
+from app.core.security import get_current_user
+from app.models.entities import Application, ApplicationMaterial, Job, JobSource, MatchScore, Resume, User
 from app.models.enums import ApplicationStatus, MaterialType
 from app.schemas.job import JobDiscoverRequest, JobImportRequest, JobRead
 from app.services.agents.material_agent import MaterialAgent
@@ -20,12 +21,16 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[JobRead])
-def list_jobs(db: Session = Depends(get_db)) -> list[Job]:
-    return list(db.scalars(select(Job).order_by(Job.created_at.desc())).all())
+def list_jobs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> list[Job]:
+    return list(db.scalars(select(Job).where(Job.user_id == current_user.id).order_by(Job.created_at.desc())).all())
 
 
 @router.post("/discover", response_model=list[JobRead])
-async def discover_jobs(payload: JobDiscoverRequest, db: Session = Depends(get_db)) -> list[Job]:
+async def discover_jobs(
+    payload: JobDiscoverRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Job]:
     keywords = [part for part in payload.keywords.split() if part]
     query = JobSearchQuery(keywords=keywords, location=payload.location)
 
@@ -50,21 +55,26 @@ async def discover_jobs(payload: JobDiscoverRequest, db: Session = Depends(get_d
     jobs: list[Job] = []
     for item in discovered[: payload.limit]:
         source = _get_or_create_source(db, item.get("source_name") or "Unknown Public Source")
-        job = await _upsert_discovered_job(db, source, item)
+        job = await _upsert_discovered_job(db, source, item, current_user)
         jobs.append(job)
     db.commit()
     return jobs
 
 
 @router.post("/import-text", response_model=JobRead)
-async def import_job(payload: JobImportRequest, db: Session = Depends(get_db)) -> Job:
+async def import_job(
+    payload: JobImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Job:
     existing = None
     if payload.url:
-        existing = db.scalar(select(Job).where(Job.url == str(payload.url)))
+        existing = db.scalar(select(Job).where(Job.url == str(payload.url), Job.user_id == current_user.id))
     if existing:
         return existing
 
     job = Job(
+        user_id=current_user.id,
         company=payload.company,
         title=payload.title,
         location=payload.location,
@@ -81,7 +91,16 @@ async def import_job(payload: JobImportRequest, db: Session = Depends(get_db)) -
             "job_descriptions",
             chunks,
             [f"{job.id}:{index}" for index, _ in enumerate(chunks)],
-            [{"job_id": job.id, "company": job.company, "title": job.title, "chunk_index": index} for index, _ in enumerate(chunks)],
+            [
+                {
+                    "job_id": job.id,
+                    "user_id": current_user.id,
+                    "company": job.company,
+                    "title": job.title,
+                    "chunk_index": index,
+                }
+                for index, _ in enumerate(chunks)
+            ],
         )
     except Exception:
         job.parsed_jd_json = {**job.parsed_jd_json, "vector_index_warning": "ChromaDB indexing failed; job was saved."}
@@ -91,16 +110,23 @@ async def import_job(payload: JobImportRequest, db: Session = Depends(get_db)) -
 
 
 @router.post("/{job_id}/match/{resume_id}")
-async def match_job(job_id: str, resume_id: str, db: Session = Depends(get_db)) -> dict:
-    job = db.get(Job, job_id)
-    resume = db.get(Resume, resume_id)
+async def match_job(
+    job_id: str,
+    resume_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    job = db.scalar(select(Job).where(Job.id == job_id, Job.user_id == current_user.id))
+    resume = db.scalar(select(Resume).where(Resume.id == resume_id, Resume.user_id == current_user.id))
     if not job or not resume:
         raise HTTPException(status_code=404, detail="Job or resume not found.")
 
     rag_context: list[str] = []
     semantic_score = None
     try:
-        vector_result = await VectorStoreService().query("resume_chunks", job.raw_description, n_results=4)
+        vector_result = await VectorStoreService().query(
+            "resume_chunks", job.raw_description, n_results=4, where={"user_id": current_user.id}
+        )
         rag_context = vector_result.documents
         if vector_result.distances:
             best_distance = min(vector_result.distances)
@@ -110,6 +136,7 @@ async def match_job(job_id: str, resume_id: str, db: Session = Depends(get_db)) 
 
     result = MatchingAgent().score(resume, job, semantic_score=semantic_score, rag_context=rag_context)
     match_score = MatchScore(
+        user_id=current_user.id,
         resume_id=resume.id,
         job_id=job.id,
         score=result["score"],
@@ -125,9 +152,16 @@ async def match_job(job_id: str, resume_id: str, db: Session = Depends(get_db)) 
     db.flush()
 
     status = ApplicationStatus.PENDING_CONFIRMATION.value if result["score"] >= 70 else ApplicationStatus.SCORED.value
-    application = db.scalar(select(Application).where(Application.job_id == job.id, Application.resume_id == resume.id))
+    application = db.scalar(
+        select(Application).where(
+            Application.job_id == job.id,
+            Application.resume_id == resume.id,
+            Application.user_id == current_user.id,
+        )
+    )
     if application is None:
         application = Application(
+            user_id=current_user.id,
             resume_id=resume.id,
             job_id=job.id,
             match_score_id=match_score.id,
@@ -143,11 +177,13 @@ async def match_job(job_id: str, resume_id: str, db: Session = Depends(get_db)) 
         select(ApplicationMaterial).where(
             ApplicationMaterial.job_id == job.id,
             ApplicationMaterial.resume_id == resume.id,
+            ApplicationMaterial.user_id == current_user.id,
             ApplicationMaterial.material_type == MaterialType.COVER_LETTER.value,
         )
     )
     if material is None:
         material = ApplicationMaterial(
+            user_id=current_user.id,
             job_id=job.id,
             resume_id=resume.id,
             material_type=MaterialType.COVER_LETTER.value,
@@ -190,17 +226,20 @@ def _dedupe_discovered_jobs(items: list[dict]) -> list[dict]:
     return deduped
 
 
-async def _upsert_discovered_job(db: Session, source: JobSource, item: dict) -> Job:
+async def _upsert_discovered_job(db: Session, source: JobSource, item: dict, current_user: User) -> Job:
     external_id = item.get("external_id")
     url = item.get("url")
-    statement = select(Job).where(Job.source_id == source.id, Job.external_id == external_id)
+    statement = select(Job).where(
+        Job.source_id == source.id, Job.external_id == external_id, Job.user_id == current_user.id
+    )
     job = db.scalar(statement)
     if job is None and url:
-        job = db.scalar(select(Job).where(Job.url == url))
+        job = db.scalar(select(Job).where(Job.url == url, Job.user_id == current_user.id))
 
     raw_description = item.get("raw_description") or "No description provided."
     if job is None:
         job = Job(
+            user_id=current_user.id,
             source_id=source.id,
             external_id=external_id,
             company=item.get("company") or "Unknown company",
@@ -212,18 +251,27 @@ async def _upsert_discovered_job(db: Session, source: JobSource, item: dict) -> 
         )
         db.add(job)
         db.flush()
-        await _index_job_description(job)
+        await _index_job_description(job, current_user)
     return job
 
 
-async def _index_job_description(job: Job) -> None:
+async def _index_job_description(job: Job, current_user: User) -> None:
     chunks = VectorStoreService.chunk_text(job.raw_description)
     try:
         await VectorStoreService().upsert_texts(
             "job_descriptions",
             chunks,
             [f"{job.id}:{index}" for index, _ in enumerate(chunks)],
-            [{"job_id": job.id, "company": job.company, "title": job.title, "chunk_index": index} for index, _ in enumerate(chunks)],
+            [
+                {
+                    "job_id": job.id,
+                    "user_id": current_user.id,
+                    "company": job.company,
+                    "title": job.title,
+                    "chunk_index": index,
+                }
+                for index, _ in enumerate(chunks)
+            ],
         )
     except Exception:
         return

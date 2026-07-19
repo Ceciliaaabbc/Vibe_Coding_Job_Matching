@@ -20,6 +20,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str | None] = mapped_column(String(255))
+    password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
 
@@ -28,7 +29,7 @@ class Resume(Base):
     __tablename__ = "resumes"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255))
     file_type: Mapped[str] = mapped_column(String(32))
     file_path: Mapped[str] = mapped_column(String(1024))
@@ -43,7 +44,7 @@ class CandidateProfile(Base):
     __tablename__ = "candidate_profiles"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
     resume_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("resumes.id"))
     name: Mapped[str | None] = mapped_column(String(255))
     headline: Mapped[str | None] = mapped_column(String(500))
@@ -73,9 +74,10 @@ class JobSource(Base):
 
 class Job(Base):
     __tablename__ = "jobs"
-    __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_jobs_source_external"),)
+    __table_args__ = (UniqueConstraint("user_id", "source_id", "external_id", name="uq_jobs_user_source_external"),)
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), index=True)
     source_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("job_sources.id"), nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(255))
     company: Mapped[str] = mapped_column(String(255))
@@ -101,7 +103,7 @@ class MatchScore(Base):
     __tablename__ = "match_scores"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
     resume_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("resumes.id"))
     job_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("jobs.id"))
     score: Mapped[int] = mapped_column(Integer)
@@ -121,7 +123,7 @@ class Application(Base):
     __table_args__ = (UniqueConstraint("user_id", "job_id", name="uq_applications_user_job"),)
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
     resume_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("resumes.id"), nullable=True)
     job_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("jobs.id"))
     match_score_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("match_scores.id"), nullable=True)
@@ -144,7 +146,7 @@ class ApplicationMaterial(Base):
     __tablename__ = "application_materials"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
     job_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("jobs.id"))
     resume_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("resumes.id"), nullable=True)
     material_type: Mapped[str] = mapped_column(String(80), default=MaterialType.COVER_LETTER.value)
@@ -163,4 +165,3 @@ class ApplicationEvent(Base):
     event_type: Mapped[str] = mapped_column(String(80))
     event_payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
-

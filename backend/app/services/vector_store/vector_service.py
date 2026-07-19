@@ -24,13 +24,22 @@ class VectorStoreService:
         collection = client.get_or_create_collection(collection_name)
         collection.upsert(ids=ids, documents=texts, metadatas=metadatas, embeddings=embeddings)
 
-    async def query(self, collection_name: str, query_text: str, n_results: int = 5) -> VectorSearchResult:
+    async def query(
+        self,
+        collection_name: str,
+        query_text: str,
+        n_results: int = 5,
+        where: dict | None = None,
+    ) -> VectorSearchResult:
         if not settings.vector_store_enabled:
             raise RuntimeError("Vector store is disabled.")
         embedding = await self.embedding_provider.embedding(query_text)
         client = get_chroma_client()
         collection = client.get_or_create_collection(collection_name)
-        result = collection.query(query_embeddings=[embedding], n_results=n_results)
+        query_arguments = {"query_embeddings": [embedding], "n_results": n_results}
+        if where:
+            query_arguments["where"] = where
+        result = collection.query(**query_arguments)
         return VectorSearchResult(
             documents=(result.get("documents") or [[]])[0],
             metadatas=(result.get("metadatas") or [[]])[0],

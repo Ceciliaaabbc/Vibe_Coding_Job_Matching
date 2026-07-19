@@ -1,6 +1,9 @@
 import { BriefcaseBusiness, FileText, Gauge, Globe2, Inbox, Send } from "lucide-react";
 import type { ElementType } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "./api/client";
+import type { AuthUser } from "./types";
+import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { JobsPage } from "./pages/JobsPage";
 import { PendingPage } from "./pages/PendingPage";
@@ -19,6 +22,27 @@ const navItems: Array<{ id: View; label: string; icon: ElementType }> = [
 
 export function App() {
   const [view, setView] = useState<View>("dashboard");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    if (!localStorage.getItem("job-agent-token")) {
+      setCheckingAuth(false);
+      return;
+    }
+    api.get<AuthUser>("/auth/me")
+      .then((response) => setUser(response.data))
+      .catch(() => localStorage.removeItem("job-agent-token"))
+      .finally(() => setCheckingAuth(false));
+  }, []);
+
+  if (checkingAuth) return <main className="main-content"><p>Checking authentication...</p></main>;
+  if (!user) return <AuthPage onAuthenticated={setUser} />;
+
+  function logout() {
+    localStorage.removeItem("job-agent-token");
+    setUser(null);
+  }
 
   return (
     <div className="app-shell">
@@ -43,6 +67,10 @@ export function App() {
             );
           })}
         </nav>
+        <div>
+          <small>{user.email}</small>
+          <button className="nav-item" type="button" onClick={logout}>Sign out</button>
+        </div>
       </aside>
 
       <main className="main-content">
