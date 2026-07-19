@@ -6,6 +6,8 @@ __pycache__/
 node_modules/
 dist/
 build/
+test-results/
+playwright-report/
 .env
 .env.local
 *.sqlite3
@@ -13,4 +15,3 @@ build/
 uploads/
 chroma_data/
 .DS_Store
-

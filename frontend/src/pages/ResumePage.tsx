@@ -82,9 +82,9 @@ export function ResumePage() {
       <form className="panel" onSubmit={uploadResume}>
         <label className="field">
           <span>Resume file</span>
-          <input name="resume" type="file" accept=".pdf,.docx" />
+          <input name="resume" type="file" accept=".pdf,.docx" data-testid="resume-file" />
         </label>
-        <button className="primary-button" type="submit">
+        <button className="primary-button" type="submit" data-testid="upload-resume">
           <Upload size={18} />
           Upload
         </button>

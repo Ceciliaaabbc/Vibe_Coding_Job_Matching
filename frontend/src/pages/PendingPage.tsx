@@ -55,7 +55,7 @@ export function PendingPage() {
 
       <div className="list">
         {items.map((item) => (
-          <article className="list-row clickable" key={item.id} onClick={() => openDetail(item.id)}>
+          <article className="list-row clickable" key={item.id} onClick={() => openDetail(item.id)} data-testid="pending-application">
             <div>
               <strong>{item.job_id}</strong>
               <span>{item.application_note ?? "Review match reasons and materials before confirming."}</span>
@@ -130,9 +130,9 @@ export function PendingPage() {
 
             <article>
               <h3>Cover Letter</h3>
-              <textarea rows={13} value={draft} onChange={(event) => setDraft(event.target.value)} />
+              <textarea rows={13} value={draft} onChange={(event) => setDraft(event.target.value)} data-testid="cover-letter" />
               {detail.materials[0] && (
-                <button className="secondary-button" type="button" onClick={() => saveMaterial(detail.materials[0])}>
+                <button className="secondary-button" type="button" onClick={() => saveMaterial(detail.materials[0])} data-testid="save-cover-letter">
                   Save Draft
                 </button>
               )}
@@ -140,7 +140,7 @@ export function PendingPage() {
           </div>
 
           <div className="drawer-actions">
-            <button className="primary-button" onClick={() => confirm(detail.application.id)} type="button">
+            <button className="primary-button" onClick={() => confirm(detail.application.id)} type="button" data-testid="confirm-application">
               <Check size={18} />
               Confirm Applied
             </button>

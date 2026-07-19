@@ -20,12 +20,7 @@ export function JobsPage() {
   }
 
   useEffect(() => {
-    loadData().then(async () => {
-      const response = await api.get<Job[]>("/jobs");
-      if (response.data.length === 0) {
-        await discoverJobs();
-      }
-    });
+    loadData();
   }, []);
 
   async function discoverJobs() {
@@ -94,25 +89,25 @@ export function JobsPage() {
       <form className="panel form-grid" onSubmit={importJob}>
         <label className="field">
           <span>Company</span>
-          <input name="company" required />
+          <input name="company" required data-testid="job-company" />
         </label>
         <label className="field">
           <span>Title</span>
-          <input name="title" required />
+          <input name="title" required data-testid="job-title" />
         </label>
         <label className="field">
           <span>Location</span>
-          <input name="location" />
+          <input name="location" data-testid="job-location" />
         </label>
         <label className="field">
           <span>URL</span>
-          <input name="url" type="url" />
+          <input name="url" type="url" data-testid="job-url" />
         </label>
         <label className="field full">
           <span>Job Description</span>
-          <textarea name="raw_description" required minLength={20} rows={10} />
+          <textarea name="raw_description" required minLength={20} rows={10} data-testid="job-description" />
         </label>
-        <button className="primary-button" type="submit">
+        <button className="primary-button" type="submit" data-testid="import-job">
           <Plus size={18} />
           Import JD
         </button>
@@ -141,7 +136,7 @@ export function JobsPage() {
             ))}
           </select>
         </label>
-        <button className="secondary-button" onClick={matchJob} type="button">
+        <button className="secondary-button" onClick={matchJob} type="button" data-testid="match-job">
           <Sparkles size={18} />
           Match
         </button>

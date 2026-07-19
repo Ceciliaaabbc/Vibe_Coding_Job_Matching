@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://job_agent:job_agent@localhost:5432/job_agent"
     chroma_host: str = "localhost"
     chroma_port: int = 8001
+    vector_store_enabled: bool = True
     upload_dir: str = "uploads"
     default_llm_provider: str = "openai"
     default_llm_model: str = "gpt-4.1-mini"

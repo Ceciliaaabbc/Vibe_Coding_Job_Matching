@@ -44,6 +44,33 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 Database schema changes should be added as Alembic revisions under `backend/alembic/versions`.
 
+## Automated verification
+
+The GitHub Actions CI pipeline verifies database migrations, backend unit/API integration tests, the TypeScript production build, and a complete Playwright browser workflow.
+
+Backend tests require a dedicated PostgreSQL database:
+
+```bash
+cd backend
+export TEST_DATABASE_URL=postgresql+psycopg://job_agent:job_agent@localhost:5432/job_agent_test
+export DATABASE_URL="$TEST_DATABASE_URL"
+export VECTOR_STORE_ENABLED=false
+pytest -q
+```
+
+The browser test covers resume upload, manual job import, matching, generated-material review, user confirmation, and the final applied state. After installing both backend and frontend dependencies and applying migrations, run:
+
+```bash
+cd frontend
+npx playwright install chromium
+DATABASE_URL=postgresql+psycopg://job_agent:job_agent@localhost:5432/job_agent_e2e \
+VECTOR_STORE_ENABLED=false \
+CORS_ORIGINS='["http://127.0.0.1:5173"]' \
+npm run test:e2e
+```
+
+Setting `VECTOR_STORE_ENABLED=false` makes CI deterministic and offline. Normal Docker Compose development keeps ChromaDB enabled.
+
 ## Current Scope
 
 This is the initial project scaffold. It includes:
